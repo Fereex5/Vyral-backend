@@ -1,52 +1,60 @@
 from flask import Flask, request, jsonify
-from flask_cors import CORS
 import firebase_admin
 from firebase_admin import credentials, db
+import os
+import json
 
 app = Flask(__name__)
-CORS(app)
 
-# Initialize Firebase
-cred = credentials.Certificate("firebase_key.json")
-firebase_admin.initialize_app(cred, {
-    'databaseURL': 'https://vyralapp-default-rtdb.firebaseio.com/'
-})
+# Load Firebase credentials from environment variable
+firebase_json = os.getenv("FIREBASE_KEY_JSON")
+firebase_dict = json.loads(firebase_json)
+cred = credentials.Certificate(firebase_dict)
+
+# Initialize Firebase app
+if not firebase_admin._apps:
+    firebase_admin.initialize_app(cred, {
+        'databaseURL': 'https://vyralapp-default-rtdb.firebaseio.com/'
+    })
 
 @app.route('/')
 def home():
-    return "🔥 Vyral Backend + Firebase is Live!"
+    return jsonify({"message": "Vyral backend is live 🔥"})
 
 @app.route('/signup', methods=['POST'])
 def signup():
     data = request.get_json()
-    username = data.get('username')
-    password = data.get('password')
+    username = data.get("username")
+    password = data.get("password")
 
     if not username or not password:
-        return jsonify({'status': 'error', 'message': 'Missing username or password'})
+        return jsonify({"error": "Username and password required"}), 400
 
-    ref = db.reference('/users')
-    if ref.child(username).get():
-        return jsonify({'status': 'error', 'message': 'User already exists'})
+    ref = db.reference(f"/users/{username}")
+    if ref.get():
+        return jsonify({"error": "User already exists"}), 409
 
-    ref.child(username).set({'password': password})
-    return jsonify({'status': 'success', 'message': 'User created'})
+    ref.set({"username": username, "password": password})
+    return jsonify({"message": "Signup successful ✅"}), 201
 
 @app.route('/login', methods=['POST'])
 def login():
     data = request.get_json()
-    username = data.get('username')
-    password = data.get('password')
+    username = data.get("username")
+    password = data.get("password")
 
-    ref = db.reference('/users')
-    user = ref.child(username).get()
+    if not username or not password:
+        return jsonify({"error": "Username and password required"}), 400
+
+    ref = db.reference(f"/users/{username}")
+    user = ref.get()
 
     if not user:
-        return jsonify({'status': 'error', 'message': 'User not found'})
-    if user['password'] != password:
-        return jsonify({'status': 'error', 'message': 'Wrong password'})
+        return jsonify({"error": "User not found"}), 404
+    if user.get("password") != password:
+        return jsonify({"error": "Incorrect password"}), 401
 
-    return jsonify({'status': 'success', 'message': 'Login successful'})
+    return jsonify({"message": "Login successful 🎉"}), 200
 
 if __name__ == '__main__':
     app.run()
