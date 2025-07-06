@@ -1,12 +1,20 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+import firebase_admin
+from firebase_admin import credentials, db
 
 app = Flask(__name__)
 CORS(app)
 
+# Initialize Firebase
+cred = credentials.Certificate("firebase_key.json")
+firebase_admin.initialize_app(cred, {
+    'databaseURL': 'https://vyralapp-default-rtdb.firebaseio.com/'
+})
+
 @app.route('/')
 def home():
-    return "🔥 Vyral Backend Running!"
+    return "🔥 Vyral Backend + Firebase is Live!"
 
 @app.route('/signup', methods=['POST'])
 def signup():
@@ -15,9 +23,14 @@ def signup():
     password = data.get('password')
 
     if not username or not password:
-        return jsonify({"status": "error", "message": "Missing data"})
+        return jsonify({'status': 'error', 'message': 'Missing username or password'})
 
-    return jsonify({"status": "success", "message": "Signup simulated!"})
+    ref = db.reference('/users')
+    if ref.child(username).get():
+        return jsonify({'status': 'error', 'message': 'User already exists'})
+
+    ref.child(username).set({'password': password})
+    return jsonify({'status': 'success', 'message': 'User created'})
 
 @app.route('/login', methods=['POST'])
 def login():
@@ -25,10 +38,15 @@ def login():
     username = data.get('username')
     password = data.get('password')
 
-    if username == "demo_user" and password == "demo_pass":
-        return jsonify({"status": "success", "message": "Login success!"})
-    else:
-        return jsonify({"status": "error", "message": "Invalid credentials"})
+    ref = db.reference('/users')
+    user = ref.child(username).get()
 
-if __name__ == "__main__":
+    if not user:
+        return jsonify({'status': 'error', 'message': 'User not found'})
+    if user['password'] != password:
+        return jsonify({'status': 'error', 'message': 'Wrong password'})
+
+    return jsonify({'status': 'success', 'message': 'Login successful'})
+
+if __name__ == '__main__':
     app.run()
